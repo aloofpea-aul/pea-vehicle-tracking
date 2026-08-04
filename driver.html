@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>PEA Vehicle Tracking - คนขับ</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --bg:#0F1117; --card:#171A24; --card2:#1E2230; --line:#2A2F40;
+    --purple:#7C4DFF; --purple-dim:#4B2FA0; --amber:#F5A623; --green:#3DDC84; --red:#FF5C5C;
+    --text:#EDEFF7; --sub:#8A90A6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+  header{padding:20px 20px 12px;border-bottom:1px solid var(--line)}
+  header .brand{font-size:12px;letter-spacing:.14em;color:var(--purple);text-transform:uppercase;font-weight:600}
+  header h1{margin:4px 0 0;font-size:20px;font-weight:700}
+  main{flex:1;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:6px}
+  select,input{width:100%;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:15px}
+  .status-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;text-align:center}
+  .dot{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:8px;background:var(--sub)}
+  .dot.on{background:var(--green);box-shadow:0 0 0 0 rgba(61,220,132,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,220,132,.5)}70%{box-shadow:0 0 0 12px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
+  .status-label{font-size:14px;color:var(--sub)}
+  .status-value{font-size:22px;font-weight:700;margin-top:6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .metric{background:var(--card2);border-radius:10px;padding:10px;text-align:left}
+  .metric .k{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em}
+  .metric .v{font-family:'IBM Plex Mono',monospace;font-size:15px;margin-top:2px}
+  button{width:100%;padding:16px;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer}
+  #toggleBtn{background:var(--purple);color:#fff}
+  #toggleBtn.stop{background:var(--red)}
+  #toggleBtn:disabled{background:var(--card2);color:var(--sub)}
+  .hint{font-size:12px;color:var(--sub);text-align:center;line-height:1.6}
+  .log{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--sub);text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">PEA · Ao Luek</div>
+  <h1>ติดตามรถ (คนขับ)</h1>
+</header>
+<main>
+  <div class="field">
+    <label>เลือกรถที่ใช้งาน</label>
+    <select id="vehicleSelect">
+      <option value="">กำลังโหลดรายการรถ...</option>
+    </select>
+  </div>
+
+  <div class="status-card">
+    <div><span class="dot" id="statusDot"></span><span class="status-label" id="statusLabel">ยังไม่เริ่มติดตาม</span></div>
+    <div class="status-value" id="statusVehicle">-</div>
+    <div class="grid">
+      <div class="metric"><div class="k">ความเร็ว</div><div class="v" id="mSpeed">- กม./ชม.</div></div>
+      <div class="metric"><div class="k">ความแม่นยำ</div><div class="v" id="mAcc">- ม.</div></div>
+      <div class="metric"><div class="k">ส่งล่าสุด</div><div class="v" id="mTime">-</div></div>
+      <div class="metric"><div class="k">จำนวนครั้ง</div><div class="v" id="mCount">0</div></div>
+    </div>
+  </div>
+
+  <button id="toggleBtn" disabled>เริ่มติดตาม</button>
+  <div class="hint">แอปจะส่งตำแหน่งทุก 10 วินาทีขณะเปิดหน้านี้ค้างไว้<br>กรุณาอย่าปิดหน้าจอระหว่างปฏิบัติงาน</div>
+  <div class="log" id="log"></div>
+</main>
+
+<script>
+// ⚠️ CONFIG - แก้ 2 ค่านี้ก่อนใช้งานจริง
+const LIFF_ID = 'YOUR_LIFF_ID_HERE';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbytt3h9GVgqqQbuOwrxJGQTOn5pe-fKOOW7H_t6wNWlHCbYGZVY8YtIE-Mcj4kVbkcx/exec';
+const SEND_INTERVAL_MS = 10000;
+
+let watchId = null;
+let sendTimer = null;
+let lastPosition = null;
+let sendCount = 0;
+let tracking = false;
+let driverName = 'ไม่ทราบชื่อ';
+
+const vehicleSelect = document.getElementById('vehicleSelect');
+const toggleBtn = document.getElementById('toggleBtn');
+const statusDot = document.getElementById('statusDot');
+const statusLabel = document.getElementById('statusLabel');
+const statusVehicle = document.getElementById('statusVehicle');
+const logEl = document.getElementById('log');
+
+function log(msg){ logEl.textContent = msg; }
+
+async function loadVehicles(){
+  try{
+    const res = await fetch(`${GAS_URL}?action=vehicles`);
+    const list = await res.json();
+    vehicleSelect.innerHTML = '';
+    if(!list.length){
+      vehicleSelect.innerHTML = '<option value="">ไม่พบรายการรถ (เพิ่มใน sheet Vehicles)</option>';
+      return;
+    }
+    list.forEach(v=>{
+      const opt = document.createElement('option');
+      opt.value = v.vehicleId;
+      opt.textContent = `${v.vehicleId} - ${v.vehicleName}`;
+      vehicleSelect.appendChild(opt);
+    });
+    toggleBtn.disabled = false;
+  }catch(err){
+    log('โหลดรายการรถไม่สำเร็จ: '+err);
+  }
+}
+
+function sendPosition(){
+  if(!lastPosition) return;
+  const v = vehicleSelect.value;
+  if(!v) return;
+  const payload = {
+    vehicleId: v,
+    vehicleName: vehicleSelect.options[vehicleSelect.selectedIndex].textContent,
+    driverName,
+    lat: lastPosition.coords.latitude,
+    lng: lastPosition.coords.longitude,
+    speed: lastPosition.coords.speed != null ? lastPosition.coords.speed*3.6 : null, // m/s -> km/h
+    heading: lastPosition.coords.heading,
+    accuracy: lastPosition.coords.accuracy,
+    timestamp: new Date().toISOString()
+  };
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: {'Content-Type':'text/plain;charset=utf-8'}, // avoids CORS preflight on GAS
+    body: JSON.stringify(payload)
+  }).then(()=>{
+    sendCount++;
+    document.getElementById('mCount').textContent = sendCount;
+    document.getElementById('mTime').textContent = new Date().toLocaleTimeString('th-TH');
+    log('ส่งตำแหน่งสำเร็จ');
+  }).catch(err=> log('ส่งไม่สำเร็จ: '+err));
+}
+
+function startTracking(){
+  if(!navigator.geolocation){ log('อุปกรณ์นี้ไม่รองรับ GPS'); return; }
+  watchId = navigator.geolocation.watchPosition(pos=>{
+    lastPosition = pos;
+    document.getElementById('mSpeed').textContent = (pos.coords.speed!=null ? (pos.coords.speed*3.6).toFixed(0) : '-') + ' กม./ชม.';
+    document.getElementById('mAcc').textContent = (pos.coords.accuracy!=null ? pos.coords.accuracy.toFixed(0) : '-') + ' ม.';
+  }, err=> log('GPS error: '+err.message), { enableHighAccuracy:true, maximumAge:5000, timeout:15000 });
+
+  sendTimer = setInterval(sendPosition, SEND_INTERVAL_MS);
+  tracking = true;
+  toggleBtn.textContent = 'หยุดติดตาม';
+  toggleBtn.classList.add('stop');
+  statusDot.classList.add('on');
+  statusLabel.textContent = 'กำลังติดตาม';
+  statusVehicle.textContent = vehicleSelect.options[vehicleSelect.selectedIndex].textContent;
+  vehicleSelect.disabled = true;
+}
+
+function stopTracking(){
+  if(watchId!=null) navigator.geolocation.clearWatch(watchId);
+  if(sendTimer) clearInterval(sendTimer);
+  tracking = false;
+  toggleBtn.textContent = 'เริ่มติดตาม';
+  toggleBtn.classList.remove('stop');
+  statusDot.classList.remove('on');
+  statusLabel.textContent = 'ยังไม่เริ่มติดตาม';
+  vehicleSelect.disabled = false;
+}
+
+toggleBtn.addEventListener('click', ()=>{
+  if(!vehicleSelect.value){ log('กรุณาเลือกรถก่อน'); return; }
+  tracking ? stopTracking() : startTracking();
+});
+
+async function init(){
+  await loadVehicles();
+  try{
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+    const profile = await liff.getProfile();
+    driverName = profile.displayName;
+  }catch(err){
+    log('LIFF init: '+err+' (ทดสอบนอก LINE ได้ปกติ)');
+  }
+}
+init();
+</script>
+</body>
+</html>
