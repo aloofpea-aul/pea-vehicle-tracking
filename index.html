@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PEA Ao Luek | Live Vehicle Tracking</title>
+<title>PEA | Live Vehicle Tracking - งานประชุม ผจก.</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -124,8 +124,10 @@ function upsertMarker(v){
   const s = statusOf(v.lastUpdate);
   const color = statusColor(s);
   const icon = vehicleIcon(color, v.heading);
-  const popupHtml = `<div class="popup-title">${v.vehicleName}</div>
+  const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} ที่นั่ง` : `${v.passengerCount} คน`) : '-';
+  const popupHtml = `<div class="popup-title">${v.licensePlate || v.vehicleId}</div>
     <div class="popup-row">คนขับ: ${v.driverName || '-'}</div>
+    <div class="popup-row">ผู้โดยสาร: ${paxLabel}</div>
     <div class="popup-row">ความเร็ว: ${v.speed!=null ? v.speed.toFixed(0)+' กม./ชม.' : '-'}</div>
     <div class="popup-row">อัปเดต: ${timeAgo(v.lastUpdate)}</div>`;
   if (markers[v.vehicleId]) {
@@ -147,23 +149,24 @@ function render(data){
   }
 
   data
-    .filter(v => !q || v.vehicleName.toLowerCase().includes(q) || (v.driverName||'').toLowerCase().includes(q) || v.vehicleId.toLowerCase().includes(q))
+    .filter(v => !q || (v.licensePlate||'').toLowerCase().includes(q) || (v.driverName||'').toLowerCase().includes(q) || v.vehicleId.toLowerCase().includes(q))
     .sort((a,b)=> statusOf(a.lastUpdate)==='off' ? 1 : -1)
     .forEach(v=>{
       const s = statusOf(v.lastUpdate);
       if(s==='on') on++; else if(s==='stale') stale++; else off++;
       upsertMarker(v);
 
+      const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} คน` : `${v.passengerCount} คน`) : '- คน';
       const card = document.createElement('div');
       card.className = 'vcard' + (selectedId===v.vehicleId ? ' selected' : '');
       card.innerHTML = `
         <div class="vcard-top">
-          <div><div class="vname">${v.vehicleName}</div><div class="vid">${v.vehicleId}</div></div>
+          <div><div class="vname">${v.licensePlate || v.vehicleId}</div><div class="vid">${v.vehicleId}</div></div>
           <span class="badge ${s}">${statusText(s)}</span>
         </div>
         <div class="vmeta">
           <span>${v.driverName || 'ไม่ระบุคนขับ'}</span>
-          <span>${v.speed!=null ? v.speed.toFixed(0)+' กม./ชม.' : '-'}</span>
+          <span>${paxLabel}</span>
           <span>${timeAgo(v.lastUpdate)}</span>
         </div>`;
       card.addEventListener('click', ()=>{

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PEA Admin - ส่งข้อความคนขับ</title>
+<style>
+  :root{--bg:#0B0D14;--panel:#12141F;--card:#181B29;--line:#242838;--purple:#7C4DFF;--green:#3DDC84;--amber:#F5A623;--text:#EDEFF7;--sub:#7C8299}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;padding:24px;max-width:720px;margin:0 auto}
+  .brand{font-size:11px;letter-spacing:.16em;color:var(--purple);text-transform:uppercase;font-weight:700}
+  h1{margin:6px 0 20px;font-size:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+  label{display:block;font-size:12px;color:var(--sub);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}
+  textarea{width:100%;min-height:110px;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:14px;resize:vertical;font-family:inherit}
+  .targets{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .chip{padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:var(--card);font-size:13px;cursor:pointer}
+  .chip.active{border-color:var(--purple);background:rgba(124,77,255,.15);color:var(--purple)}
+  .driver-list{max-height:260px;overflow-y:auto;margin-top:12px;display:none}
+  .driver-list.show{display:block}
+  .drow{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:pointer}
+  .drow.selected{border-color:var(--purple)}
+  .drow .plate{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
+  .drow .name{font-size:12px;color:var(--sub)}
+  .drow input{margin-right:4px}
+  button.send{width:100%;padding:16px;border:none;border-radius:12px;background:var(--purple);color:#fff;font-size:15px;font-weight:700;margin-top:16px}
+  button.send:disabled{background:var(--card);color:var(--sub)}
+  .result{font-size:13px;margin-top:10px;color:var(--sub)}
+  .result.ok{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="brand">PEA Admin</div>
+<h1>ส่งข้อความถึงคนขับ</h1>
+
+<div class="card">
+  <label>ข้อความ</label>
+  <textarea id="msgBox" placeholder="พิมพ์ข้อความประกาศ เช่น รถทุกคันเตรียมออกจากโรงแรมเวลา 08:00 น."></textarea>
+
+  <label style="margin-top:16px">ส่งถึง</label>
+  <div class="targets">
+    <div class="chip active" data-target="group">📢 กลุ่มไลน์รวม</div>
+    <div class="chip" data-target="all_drivers">👥 คนขับทุกคน (รายบุคคล)</div>
+    <div class="chip" data-target="select">✅ เลือกเฉพาะบางคัน</div>
+  </div>
+
+  <div class="driver-list" id="driverList"></div>
+
+  <button class="send" id="sendBtn">ส่งข้อความ</button>
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbytt3h9GVgqqQbuOwrxJGQTOn5pe-fKOOW7H_t6wNWlHCbYGZVY8YtIE-Mcj4kVbkcx/exec';
+
+let currentTarget = 'group';
+let vehicles = [];
+let selectedIds = new Set();
+
+document.querySelectorAll('.chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    currentTarget = chip.dataset.target;
+    document.getElementById('driverList').classList.toggle('show', currentTarget==='select');
+    if(currentTarget==='select' && !vehicles.length) loadVehicles();
+  });
+});
+
+async function loadVehicles(){
+  const listEl = document.getElementById('driverList');
+  listEl.innerHTML = '<div class="result">กำลังโหลด...</div>';
+  try{
+    const res = await fetch(`${GAS_URL}?action=vehicles`);
+    vehicles = (await res.json()).filter(v=>v.driverLineUserId);
+    if(!vehicles.length){ listEl.innerHTML = '<div class="result">ยังไม่มีคนขับลงทะเบียนเลย</div>'; return; }
+    listEl.innerHTML = '';
+    vehicles.forEach(v=>{
+      const row = document.createElement('div');
+      row.className = 'drow';
+      row.innerHTML = `<input type="checkbox"><div><div class="plate">${v.licensePlate}</div><div class="name">${v.driverName||'-'} · ${v.vehicleId}</div></div>`;
+      row.addEventListener('click', (e)=>{
+        if(e.target.tagName!=='INPUT') row.querySelector('input').checked = !row.querySelector('input').checked;
+        const checked = row.querySelector('input').checked;
+        row.classList.toggle('selected', checked);
+        checked ? selectedIds.add(v.driverLineUserId) : selectedIds.delete(v.driverLineUserId);
+      });
+      listEl.appendChild(row);
+    });
+  }catch(err){ listEl.innerHTML = '<div class="result">โหลดรายชื่อไม่สำเร็จ</div>'; }
+}
+
+document.getElementById('sendBtn').addEventListener('click', async ()=>{
+  const message = document.getElementById('msgBox').value.trim();
+  const resultEl = document.getElementById('result');
+  if(!message){ resultEl.textContent = 'กรุณาพิมพ์ข้อความก่อน'; resultEl.className='result'; return; }
+  let target = currentTarget;
+  if(currentTarget === 'select'){
+    if(!selectedIds.size){ resultEl.textContent = 'กรุณาเลือกอย่างน้อย 1 คัน'; resultEl.className='result'; return; }
+    target = Array.from(selectedIds);
+  }
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  try{
+    const res = await fetch(GAS_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ type:'broadcast', message, target })
+    });
+    const data = await res.json();
+    if(data.ok){ resultEl.textContent = `ส่งสำเร็จ (${data.sentTo})`; resultEl.className='result ok'; }
+    else { resultEl.textContent = 'ส่งไม่สำเร็จ: '+data.error; resultEl.className='result'; }
+  }catch(err){
+    resultEl.textContent = 'เกิดข้อผิดพลาด: '+err;
+  }
+  btn.disabled = false; btn.textContent = 'ส่งข้อความ';
+});
+</script>
+</body>
+</html>
