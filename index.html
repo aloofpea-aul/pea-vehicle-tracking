@@ -185,8 +185,9 @@ async function poll(){
     const res = await fetch(`${GAS_URL}?action=positions`);
     const data = await res.json();
     render(data);
+    document.getElementById('topbarText').textContent = 'อัปเดตทุก 8 วินาที';
   }catch(err){
-    document.getElementById('topbarText').textContent = 'เชื่อมต่อไม่สำเร็จ';
+    document.getElementById('topbarText').textContent = 'เชื่อมต่อไม่สำเร็จ กำลังลองใหม่...';
   }
 }
 
