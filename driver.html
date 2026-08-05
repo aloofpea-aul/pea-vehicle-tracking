@@ -54,6 +54,11 @@
   <h1>ติดตามรถ (คนขับ)</h1>
 </header>
 <main>
+  <div id="liffLoading" style="text-align:center;padding:60px 20px;color:var(--sub);font-size:14px;line-height:1.8">
+    กำลังเข้าสู่ระบบผ่าน LINE...<br>
+    <span style="font-size:12px">ถ้าเปิดผ่านลิงก์นอกแอป LINE อาจใช้เวลาสักครู่</span>
+  </div>
+  <div id="mainContent" style="display:none">
   <div id="vehicleBox"><div class="not-registered">กำลังตรวจสอบข้อมูลรถของท่าน...</div></div>
 
   <div class="passenger-card">
@@ -79,7 +84,9 @@
   <button class="main" id="toggleBtn" disabled>เริ่มติดตาม</button>
   <div class="hint">แอปจะส่งตำแหน่งทุก 10 วินาทีขณะเปิดหน้านี้ค้างไว้<br>กรุณาอย่าปิดหน้าจอระหว่างปฏิบัติงาน</div>
   <div class="log" id="log"></div>
+  </div>
 </main>
+
 
 <script>
 // ⚠️ CONFIG
@@ -146,6 +153,7 @@ function sendPosition(){
     passengerCount,
     timestamp: new Date().toISOString()
   };
+  log('กำลังส่ง...');
   fetch(GAS_URL, {
     method: 'POST', headers: {'Content-Type':'text/plain;charset=utf-8'},
     body: JSON.stringify(payload)
@@ -154,7 +162,7 @@ function sendPosition(){
     document.getElementById('mCount').textContent = sendCount;
     document.getElementById('mTime').textContent = new Date().toLocaleTimeString('th-TH');
     log('ส่งตำแหน่งสำเร็จ');
-  }).catch(err=> log('ส่งไม่สำเร็จ: '+err));
+  }).catch(err=> log('ส่งไม่สำเร็จ (จะลองใหม่รอบถัดไป): '+err));
 }
 
 function startTracking(){
@@ -194,6 +202,8 @@ async function init(){
   }catch(err){
     log('LIFF init: '+err+' (ทดสอบนอก LINE ได้ปกติ แต่จะหารถอัตโนมัติไม่ได้)');
   }
+  document.getElementById('liffLoading').style.display = 'none';
+  document.getElementById('mainContent').style.display = '';
   await loadMyVehicle();
 }
 init();
