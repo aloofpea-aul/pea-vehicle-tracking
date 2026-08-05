@@ -132,21 +132,24 @@ function timeAgo(iso){
   return `${Math.round(diffSec/3600)} ชม.ที่แล้ว`;
 }
 
-function vehicleIcon(color, heading){
+function vehicleIcon(color, heading, label){
   const rot = heading != null ? heading : 0;
   return L.divIcon({
     className: '',
-    html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px ${color}33,0 2px 6px rgba(0,0,0,.5);transform:rotate(${rot}deg)">
-             <svg width="13" height="13" viewBox="0 0 24 24" fill="#0B0D14"><path d="M12 2 L20 20 L12 16 L4 20 Z"/></svg>
+    html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-4px)">
+             <div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px ${color}33,0 2px 6px rgba(0,0,0,.5);transform:rotate(${rot}deg)">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="#0B0D14"><path d="M12 2 L20 20 L12 16 L4 20 Z"/></svg>
+             </div>
+             <div style="margin-top:3px;background:#12141F;color:#EDEFF7;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid ${color};white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,.4)">${label}</div>
            </div>`,
-    iconSize: [26,26], iconAnchor: [13,13]
+    iconSize: [26,46], iconAnchor: [13,17]
   });
 }
 
 function upsertMarker(v){
   const s = statusOf(v.lastUpdate);
   const color = statusColor(s);
-  const icon = vehicleIcon(color, v.heading);
+  const icon = vehicleIcon(color, v.heading, v.licensePlate || v.vehicleId);
   const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} ที่นั่ง` : `${v.passengerCount} คน`) : '-';
   const popupHtml = `<div class="popup-title">${v.licensePlate || v.vehicleId}</div>
     <div class="popup-row">คนขับ: ${v.driverName || '-'}</div>
