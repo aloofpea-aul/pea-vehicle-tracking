@@ -199,10 +199,24 @@ function startTracking(){
   statusLabel.textContent = 'กำลังติดตาม';
 }
 
+function sendStopSignal(){
+  if(!myVehicle) return;
+  const payload = { type:'stop', vehicleId: myVehicle.vehicleId };
+  try{
+    // sendBeacon ทำงานได้แม้หน้าเว็บกำลังจะปิด (ต่างจาก fetch ที่อาจถูกยกเลิกกลางคัน)
+    navigator.sendBeacon(GAS_URL, new Blob([JSON.stringify(payload)], { type:'text/plain;charset=utf-8' }));
+  }catch(err){
+    fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+  }
+}
+// เผื่อคนขับปิดแท็บ/แอปไปเลยโดยไม่ได้กดปุ่มหยุด ก็ยังส่งสัญญาณหยุดให้ได้
+window.addEventListener('pagehide', ()=>{ if(tracking) sendStopSignal(); });
+
 function stopTracking(){
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   if(sendTimer) clearInterval(sendTimer);
   releaseWakeLock();
+  sendStopSignal();
   tracking = false;
   toggleBtn.textContent = 'เริ่มติดตาม';
   toggleBtn.classList.remove('stop');

@@ -82,7 +82,7 @@
 <script>
 // ⚠️ CONFIG - แก้ URL ให้ตรงกับ Apps Script deployment ของคุณ
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbytt3h9GVgqqQbuOwrxJGQTOn5pe-fKOOW7H_t6wNWlHCbYGZVY8YtIE-Mcj4kVbkcx/exec';
-const POLL_MS = 5000;
+const POLL_MS = 8000;
 const CENTER = [8.2733, 98.8324]; // อ่าวลึก, กระบี่
 
 const map = L.map('map', { zoomControl: true }).setView(CENTER, 12);
@@ -117,16 +117,17 @@ const markers = {}; // vehicleId -> L.Marker
 let selectedId = null;
 let currentData = [];
 
-// เกณฑ์สถานะ: ปรับให้เผื่อกรณีจอมือถือดับ/หลับระหว่างขับทางไกล (ทำให้ browser หยุดส่ง GPS ชั่วคราว)
-const ONLINE_MAX_MIN = 1.5;  // ส่งมาไม่เกิน 1.5 นาที = ONLINE
-const IDLE_MAX_MIN = 6;      // 1.5-6 นาที = IDLE (ปกติของจอดับชั่วคราว ยังไม่ต้องตกใจ)
-                              // เกิน 6 นาที = OFFLINE (น่าจะปิดแอปจริงหรือมีปัญหา)
+// เกณฑ์สถานะ: OFFLINE จะเกิดเฉพาะตอนคนขับกดหยุด/ปิดแอปจริงๆ (ส่งสัญญาณ stop มาชัดเจน)
+// ส่วน ONLINE/IDLE คำนวณจากเวลาระหว่างจุดรับส่งที่อาจไกลกัน จึงให้ IDLE ค้างได้นานโดยไม่ตัดเป็น OFFLINE เอง
+const ONLINE_MAX_MIN = 1.5;      // ส่งมาไม่เกิน 1.5 นาที = ONLINE
+const SAFETY_OFFLINE_MIN = 30;   // เผื่อแอปปิดไปโดยไม่ได้กดหยุด (เช่น แบตหมด) นานเกิน 30 นาทีค่อยถือว่า OFFLINE
 
-function statusOf(lastUpdateIso){
-  const diffMin = (Date.now() - new Date(lastUpdateIso).getTime()) / 60000;
+function statusOf(v){
+  if (v.trackingStatus === 'stopped') return 'off';
+  const diffMin = (Date.now() - new Date(v.lastUpdate).getTime()) / 60000;
+  if (diffMin > SAFETY_OFFLINE_MIN) return 'off';
   if (diffMin < ONLINE_MAX_MIN) return 'on';
-  if (diffMin < IDLE_MAX_MIN) return 'stale';
-  return 'off';
+  return 'stale';
 }
 function statusColor(s){ return s==='on' ? '#3DDC84' : s==='stale' ? '#F5A623' : '#7C8299'; }
 function statusText(s){ return s==='on' ? 'Online' : s==='stale' ? 'Idle' : 'Offline'; }
@@ -152,7 +153,12 @@ function vehicleIcon(color, heading, label){
 }
 
 function upsertMarker(v){
-  const s = statusOf(v.lastUpdate);
+  const s = statusOf(v);
+  if (s === 'off') {
+    // ไม่แสดงหมุดของรถที่ OFFLINE บนแผนที่ — ถ้าเคยมีหมุดอยู่ก่อน ให้เอาออก
+    if (markers[v.vehicleId]) { map.removeLayer(markers[v.vehicleId]); delete markers[v.vehicleId]; }
+    return;
+  }
   const color = statusColor(s);
   const icon = vehicleIcon(color, v.heading, v.licensePlate || v.vehicleId);
   const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} ที่นั่ง` : `${v.passengerCount} คน`) : '-';
@@ -181,9 +187,9 @@ function render(data){
 
   data
     .filter(v => !q || (v.licensePlate||'').toLowerCase().includes(q) || (v.driverName||'').toLowerCase().includes(q) || v.vehicleId.toLowerCase().includes(q))
-    .sort((a,b)=> statusOf(a.lastUpdate)==='off' ? 1 : -1)
+    .sort((a,b)=> statusOf(a)==='off' ? 1 : -1)
     .forEach(v=>{
-      const s = statusOf(v.lastUpdate);
+      const s = statusOf(v);
       if(s==='on') on++; else if(s==='stale') stale++; else off++;
       upsertMarker(v);
 
@@ -214,14 +220,21 @@ function render(data){
   document.getElementById('cntOff').textContent = off;
 }
 
+let consecutiveFailures = 0;
+
 async function poll(){
   try{
     const res = await fetch(`${GAS_URL}?action=positions`);
     const data = await res.json();
     render(data);
-    document.getElementById('topbarText').textContent = 'อัปเดตทุก 5 วินาที';
+    consecutiveFailures = 0;
+    document.getElementById('topbarText').textContent = 'อัปเดตทุก ' + (POLL_MS/1000) + ' วินาที';
   }catch(err){
-    document.getElementById('topbarText').textContent = 'เชื่อมต่อไม่สำเร็จ กำลังลองใหม่...';
+    consecutiveFailures++;
+    // แสดง error เฉพาะเมื่อพลาดติดต่อกันหลายครั้ง กันข้อความกระพริบสลับไปมาจากการสะดุดครั้งเดียว
+    if (consecutiveFailures >= 2) {
+      document.getElementById('topbarText').textContent = 'เชื่อมต่อไม่สำเร็จ กำลังลองใหม่...';
+    }
   }
 }
 
