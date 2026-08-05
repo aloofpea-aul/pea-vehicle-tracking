@@ -116,7 +116,10 @@ function renderVehicleBox(){
     toggleBtn.disabled = true;
     return;
   }
-  vehicleBox.innerHTML = `<div class="veh-card"><div class="plate">${myVehicle.licensePlate}</div><div class="id">${myVehicle.vehicleId} · ${myVehicle.driverName || ''}</div></div>`;
+  vehicleBox.innerHTML = `<div class="veh-card"><div class="plate">${myVehicle.licensePlate}</div><div class="id">${myVehicle.vehicleId} · ${myVehicle.driverName || ''}</div>
+    <div style="margin-top:10px">${tracking
+      ? '<span style="font-size:11px;color:var(--sub)">หยุดติดตามก่อนถึงจะเปลี่ยนรถได้</span>'
+      : `<a href="${REGISTER_URL}" style="font-size:12px;color:var(--purple)">เปลี่ยนรถ →</a>`}</div></div>`;
   capacityHint.textContent = myVehicle.seatCapacity ? `ความจุ ${myVehicle.seatCapacity} ที่นั่ง` : '';
   toggleBtn.disabled = false;
 }
@@ -197,6 +200,7 @@ function startTracking(){
   toggleBtn.classList.add('stop');
   statusDot.classList.add('on');
   statusLabel.textContent = 'กำลังติดตาม';
+  renderVehicleBox();
 }
 
 function sendStopSignal(){
@@ -222,6 +226,7 @@ function stopTracking(){
   toggleBtn.classList.remove('stop');
   statusDot.classList.remove('on');
   statusLabel.textContent = 'ยังไม่เริ่มติดตาม';
+  renderVehicleBox();
 }
 
 toggleBtn.addEventListener('click', ()=> tracking ? stopTracking() : startTracking());

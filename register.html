@@ -20,6 +20,7 @@
   .profile .sub2{font-size:11px;color:var(--sub)}
   .veh-item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer}
   .veh-item.selected{border-color:var(--purple);background:rgba(124,77,255,.12)}
+  .veh-item.taken{border-color:var(--line)}
   .veh-item .plate{font-family:'IBM Plex Mono',monospace;font-weight:800;font-size:16px}
   .veh-item .meta{font-size:11px;color:var(--sub);margin-top:2px}
   #confirmBtn{width:100%;padding:16px;border:none;border-radius:12px;background:var(--purple);color:#fff;font-size:16px;font-weight:700}
@@ -47,26 +48,40 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbytt3h9GVgqqQbuOwrxJGQT
 
 let profile = null;
 let selected = null;
+let myCurrentVehicleId = null;
 
 async function loadVehicles(){
   const listEl = document.getElementById('vehicleList');
   try{
-    const res = await fetch(`${GAS_URL}?action=vehicles&unassigned=1`);
+    const res = await fetch(`${GAS_URL}?action=vehicles`);
     const list = await res.json();
-    if(!list.length){ listEl.innerHTML = '<div class="empty">ไม่มีรถว่างให้เลือกแล้ว กรุณาติดต่อแอดมิน</div>'; return; }
+    if(!list.length){ listEl.innerHTML = '<div class="empty">ไม่พบข้อมูลรถ กรุณาติดต่อแอดมิน</div>'; return; }
     listEl.innerHTML = '';
     list.forEach(v=>{
+      const isMine = profile && v.driverLineUserId === profile.userId;
+      const isTaken = v.driverLineUserId && !isMine;
+      if (isMine) myCurrentVehicleId = v.vehicleId;
+
       const el = document.createElement('div');
-      el.className = 'veh-item';
-      el.innerHTML = `<div class="plate">${v.licensePlate}</div><div class="meta">${v.vehicleId} · ${v.vehicleType||''} · ${v.seatCapacity||'-'} ที่นั่ง</div>`;
-      el.addEventListener('click', ()=>{
-        document.querySelectorAll('.veh-item').forEach(x=>x.classList.remove('selected'));
-        el.classList.add('selected');
-        selected = v;
-        document.getElementById('confirmBtn').disabled = false;
-      });
+      el.className = 'veh-item' + (isMine ? ' selected' : '') + (isTaken ? ' taken' : '');
+      const statusLabel = isMine ? '✅ รถของท่านตอนนี้' : (isTaken ? `ไม่ว่าง (${v.driverName || 'มีคนขับแล้ว'})` : `${v.vehicleType||''} · ${v.seatCapacity||'-'} ที่นั่ง`);
+      el.innerHTML = `<div class="plate">${v.licensePlate}</div><div class="meta">${v.vehicleId} · ${statusLabel}</div>`;
+      if (isMine) selected = v;
+      if (!isTaken) {
+        el.addEventListener('click', ()=>{
+          document.querySelectorAll('.veh-item').forEach(x=>x.classList.remove('selected'));
+          el.classList.add('selected');
+          selected = v;
+          document.getElementById('confirmBtn').disabled = false;
+          document.getElementById('confirmBtn').textContent = (v.vehicleId===myCurrentVehicleId) ? 'ยืนยันลงทะเบียน' : 'ยืนยันเปลี่ยนรถ';
+        });
+      } else {
+        el.style.opacity = '0.45';
+        el.style.cursor = 'not-allowed';
+      }
       listEl.appendChild(el);
     });
+    if (selected) document.getElementById('confirmBtn').disabled = false;
   }catch(err){
     listEl.innerHTML = '<div class="empty">โหลดรายการรถไม่สำเร็จ</div>';
   }
