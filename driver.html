@@ -165,8 +165,26 @@ function sendPosition(){
   }).catch(err=> log('ส่งไม่สำเร็จ (จะลองใหม่รอบถัดไป): '+err));
 }
 
+let wakeLock = null;
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=> log('หน้าจอถูกปลุกอีกครั้ง (wake lock หลุด) ลองแตะหน้าจอเพื่อคืนสถานะ'));
+    }
+  }catch(err){ /* บางเบราว์เซอร์/LIFF ยังไม่รองรับ ไม่เป็นไร ระบบยังทำงานต่อได้ */ }
+}
+function releaseWakeLock(){
+  if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+}
+// ถ้าเบราว์เซอร์คืน wake lock ให้อัตโนมัติตอนสลับแอป/ล็อกจอ ให้ขอใหม่ทันทีที่กลับมาเปิดหน้าจอ
+document.addEventListener('visibilitychange', ()=>{
+  if(tracking && document.visibilityState === 'visible') requestWakeLock();
+});
+
 function startTracking(){
   if(!navigator.geolocation){ log('อุปกรณ์นี้ไม่รองรับ GPS'); return; }
+  requestWakeLock();
   watchId = navigator.geolocation.watchPosition(pos=>{
     lastPosition = pos;
     document.getElementById('mSpeed').textContent = (pos.coords.speed!=null ? (pos.coords.speed*3.6).toFixed(0) : '-') + ' กม./ชม.';
@@ -184,6 +202,7 @@ function startTracking(){
 function stopTracking(){
   if(watchId!=null) navigator.geolocation.clearWatch(watchId);
   if(sendTimer) clearInterval(sendTimer);
+  releaseWakeLock();
   tracking = false;
   toggleBtn.textContent = 'เริ่มติดตาม';
   toggleBtn.classList.remove('stop');
