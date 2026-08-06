@@ -168,7 +168,8 @@ function upsertMarker(v){
     <div class="popup-row">คนขับ: ${v.driverName || '-'}</div>
     <div class="popup-row">ผู้โดยสาร: ${paxLabel}</div>
     <div class="popup-row">ความเร็ว: ${v.speed!=null ? v.speed.toFixed(0)+' กม./ชม.' : '-'}</div>
-    <div class="popup-row">อัปเดต: ${timeAgo(v.lastUpdate)}</div>`;
+    <div class="popup-row">อัปเดต: ${timeAgo(v.lastUpdate)}</div>
+    ${v.driverPhone ? `<div class="popup-row"><a href="tel:${v.driverPhone}" style="color:var(--purple);font-weight:700">📞 โทร ${v.driverPhone}</a></div>` : ''}`;
   if (markers[v.vehicleId]) {
     markers[v.vehicleId].setLatLng([v.lat, v.lng]).setIcon(icon).setPopupContent(popupHtml);
   } else {
@@ -207,6 +208,7 @@ function render(data){
           <span>${v.driverName || 'ไม่ระบุคนขับ'}</span>
           <span>${paxLabel}</span>
           <span>${timeAgo(v.lastUpdate)}</span>
+          ${v.driverPhone ? `<a href="tel:${v.driverPhone}" onclick="event.stopPropagation()" style="color:var(--purple);font-weight:700">📞</a>` : ''}
         </div>`;
       card.addEventListener('click', ()=>{
         selectedId = v.vehicleId;
