@@ -164,11 +164,15 @@ function upsertMarker(v){
   const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} ที่นั่ง` : `${v.passengerCount} คน`) : '-';
   const subLabel = `${v.driverName || 'ไม่ระบุคนขับ'} / ${paxLabel}`;
   const icon = vehicleIcon(color, v.heading, v.licensePlate || v.vehicleId, subLabel);
+  const tripLines = (v.todaysTrips && v.todaysTrips.length)
+    ? v.todaysTrips.map(t => `📋 ${t.passengerName}${t.pickup ? ' · ' + t.pickup : ''}${t.flight ? ' ('+t.flight+')' : ''}`).join('<br>')
+    : '';
   const popupHtml = `<div class="popup-title">${v.licensePlate || v.vehicleId}</div>
     <div class="popup-row">คนขับ: ${v.driverName || '-'}</div>
     <div class="popup-row">ผู้โดยสาร: ${paxLabel}</div>
     <div class="popup-row">ความเร็ว: ${v.speed!=null ? v.speed.toFixed(0)+' กม./ชม.' : '-'}</div>
     <div class="popup-row">อัปเดต: ${timeAgo(v.lastUpdate)}</div>
+    ${tripLines ? `<div class="popup-row" style="margin-top:6px;color:var(--amber)">${tripLines}</div>` : ''}
     <div class="popup-row" style="display:flex;gap:14px;margin-top:6px">
       ${v.driverPhone ? `<a href="tel:${v.driverPhone}" style="color:var(--purple);font-weight:700">📞 โทร</a>` : ''}
       ${v.driverLineUserId ? `<a href="#" onclick="event.preventDefault();quickLineMessage('${v.driverLineUserId}','${(v.driverName||v.licensePlate).replace(/'/g,"")}')" style="color:var(--green);font-weight:700">💬 LINE</a>` : ''}
@@ -200,6 +204,7 @@ function render(data){
       upsertMarker(v);
 
       const paxLabel = v.passengerCount!=null ? (v.seatCapacity ? `${v.passengerCount}/${v.seatCapacity} คน` : `${v.passengerCount} คน`) : '- คน';
+      const tripBadge = (v.todaysTrips && v.todaysTrips.length) ? `<span style="color:var(--amber);font-weight:700">📋 ${v.todaysTrips.length} งาน</span>` : '';
       const card = document.createElement('div');
       card.className = 'vcard' + (selectedId===v.vehicleId ? ' selected' : '');
       card.innerHTML = `
@@ -213,7 +218,8 @@ function render(data){
           <span>${timeAgo(v.lastUpdate)}</span>
           ${v.driverPhone ? `<a href="tel:${v.driverPhone}" onclick="event.stopPropagation()" style="color:var(--purple);font-weight:700">📞</a>` : ''}
           ${v.driverLineUserId ? `<a href="#" onclick="event.stopPropagation();event.preventDefault();quickLineMessage('${v.driverLineUserId}','${(v.driverName||v.licensePlate).replace(/'/g,"")}')" style="color:var(--green);font-weight:700">💬</a>` : ''}
-        </div>`;
+        </div>
+        ${tripBadge ? `<div style="margin-top:6px;font-size:11px">${tripBadge}</div>` : ''}`;
       card.addEventListener('click', ()=>{
         selectedId = v.vehicleId;
         map.setView([v.lat, v.lng], 15, { animate:true });
